@@ -81,15 +81,6 @@ instance (Eq a, Num a) => Num (InfOrNum a) where
   (+) MinusInf Inf = Inf + MinusInf
   (+) (Num x) notNum = if x == abs x then notNum else negate notNum
   (+) notNum r@(Num _) = r + notNum
-
-  (-) (Num x) (Num y) = Num $ x - y
-  (-) Inf Inf = error "Undefined operation."
-  (-) MinusInf MinusInf = MinusInf
-  (-) Inf MinusInf = error "Undefined operation."
-  (-) MinusInf Inf = error "Undefined operation."
-  (-) notNum (Num _) = notNum
-  (-) (Num _) _      = MinusInf
-
   (*) _ _ = error "Not implemented."
   fromInteger = pure . fromInteger
   abs MinusInf = Inf
