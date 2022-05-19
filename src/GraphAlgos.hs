@@ -17,6 +17,31 @@ type Start          = Index
 type End            = Index
 type Path           = [Index]
 
+data Graph = AdjacencyMatrix (Matrix EdgeLength)
+           | AdjacencyList (V.Vector [(Int, EdgeLength)]) deriving Show
+
+
+isMalformedInput :: Graph -> Bool
+isMalformedInput (AdjacencyMatrix matrix) = getDimY matrix /= getDimX matrix
+isMalformedInput (AdjacencyList _) = False -- TODO?
+
+
+isOutOfRange :: Graph -> Index -> Bool
+isOutOfRange (AdjacencyMatrix m) x = 0 > x || x >= getDimX m
+isOutOfRange (AdjacencyList v) x = 0 > x || x >= V.length v
+
+
+getNumberOfNodes :: Graph -> Int
+getNumberOfNodes (AdjacencyMatrix matrix) = getDimX matrix
+getNumberOfNodes (AdjacencyList v)        = V.length v
+
+
+getNeighbours :: Graph -> Index -> [(Index, Distance)]
+getNeighbours (AdjacencyList v)        currentNode = v V.! currentNode
+getNeighbours (AdjacencyMatrix matrix) currentNode = filter
+  ((\(_, distance) -> isNum distance))
+  (zip [0..] $ lookupRow matrix currentNode)
+
 
 data OnlyOnceQueue = OnlyOnceQueue { _set :: Set (Distance, Index),
                                      _hasItEverBeenQueued :: VU.Vector Bool,
@@ -107,8 +132,7 @@ dijkstraStep config@(graph, endNode) = do
 
 
               neighbours :: [(Index, Distance)]
-              neighbours = filter ((\(_, distance) -> isNum distance)) -- TODO: Efficiency?
-                             (zip [0..] $ lookupRow graph currentNode)
+              neighbours = getNeighbours graph currentNode
 
 
               updatedNeighbours :: [(Index, (Predecessor, Distance))]
@@ -137,9 +161,9 @@ dijkstraStep config@(graph, endNode) = do
 
 dijkstra :: Graph -> Start -> End -> (Path, Distance)
 dijkstra graph startNode endNode =
-  case getDimY graph /= getDimX graph of
+  case isMalformedInput graph of
     True
-      -> error "Maformed matrix."
+      -> error "Maformed input."
 
     _ | outOfRange startNode || outOfRange endNode
         ->
@@ -149,9 +173,10 @@ dijkstra graph startNode endNode =
         -> evalState (dijkstraStep (graph, endNode)) (predsAndDists, ooqueue)
   where
     outOfRange :: Index -> Bool
-    outOfRange x = 0 > x || x >= getDimX graph
+    outOfRange = isOutOfRange graph
 
-    numberOfNodes = getDimX graph :: Int
+    numberOfNodes :: Int
+    numberOfNodes = getNumberOfNodes graph
 
     predsAndDists :: V.Vector (Predecessor, Distance)
     predsAndDists =
@@ -169,8 +194,10 @@ dijkstra graph startNode endNode =
                               VU.// [(startNode, False)]
                             }
 
-testgraph1 :: Graph
-testgraph1 = fromListEdgeLengths $
+
+
+testListe1 :: [((Int, Int), EdgeLength)]
+testListe1 =
   foldl'
   (\xs ((x, y), v) -> ((x, y), v) : ((y, x), v) : xs  )
   []
@@ -178,9 +205,8 @@ testgraph1 = fromListEdgeLengths $
    ((1,4), Num 1), ((2,5), Num 9), ((2,6), Num 2), ((4,7), Num 2),
    ((6,7),Num 100)
   ]
-
-testgraph2 :: Graph
-testgraph2 = fromListEdgeLengths $
+testListe2 :: [((Int, Int), EdgeLength)]
+testListe2 =
   foldl'
   (\xs ((x, y), v) -> ((x, y), v) : ((y, x), v) : xs  )
   []
@@ -189,11 +215,40 @@ testgraph2 = fromListEdgeLengths $
    ((6,7),Num 100)
   ]
 
-testgraph3 :: Graph
-testgraph3 = fromListEdgeLengths $
+testListe3 :: [((Int, Int), EdgeLength)]
+testListe3 =
   foldl'
   (\xs ((x, y), v) -> ((x, y), v) : ((y, x), v) : xs  )
   []
   [((0,1), Num 40),
    ((6,7),Num 100)
   ]
+
+
+testgraph1Matrix :: Graph
+testgraph1Matrix = AdjacencyMatrix $ fromListEdgeLengths $ testListe1
+testgraph1AdjList :: Graph
+testgraph1AdjList = AdjacencyList $ vectorify testListe1
+
+testgraph2Matrix :: Graph
+testgraph2Matrix = AdjacencyMatrix $ fromListEdgeLengths $ testListe2
+testgraph2AdjList :: Graph
+testgraph2AdjList = AdjacencyList $ vectorify testListe2
+
+testgraph3Matrix :: Graph
+testgraph3Matrix = AdjacencyMatrix $ fromListEdgeLengths $ testListe3
+testgraph3AdjList :: Graph
+testgraph3AdjList = AdjacencyList $ vectorify testListe3
+
+
+vectorify :: [((Int, Int), EdgeLength)]
+          -> V.Vector [(Int, EdgeLength)]
+vectorify inputList = foldl'
+  (\acc ((i1, i2), len) -> acc V.// [(i1, (i2, len) : (acc V.! i1))])
+  (V.fromList $ replicate amountOfNodes []) inputList
+  where
+    amountOfNodes = 1 + findTupleMax inputList 0
+    findTupleMax [] acc  = acc -- TODO: Maybe write this in terms of foldl?
+    findTupleMax (((x, y),_):xs) acc
+      | x >= 0 && y >= 0 = findTupleMax xs (max x (max y acc))
+      | otherwise        = error "Nodes out of range."

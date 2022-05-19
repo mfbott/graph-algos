@@ -91,9 +91,7 @@ instance (Eq a, Num a) => Num (InfOrNum a) where
   signum MinusInf = Num (-1)
 
 
-type EdgeLength     = InfOrNum Int
-type Graph          = Matrix EdgeLength
-
+type EdgeLength = InfOrNum Int
 
 dimension :: Ord a => [((Int, Int), a)] -> Int
 dimension = (+) 1 . (foldl' (\xs ((a, b), _) -> max a (max b xs)) 0)
